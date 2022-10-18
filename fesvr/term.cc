@@ -30,7 +30,9 @@ class canonical_termios_t
   bool restore_tios;
 };
 
+#ifndef ENABLE_FORCE_RISCV
 static canonical_termios_t tios; // exit() will clean up for us
+#endif
 
 int canonical_terminal_t::read()
 {

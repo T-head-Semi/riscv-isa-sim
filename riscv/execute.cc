@@ -60,6 +60,46 @@ static void commit_log_print_value(FILE *log_file, int width, uint64_t val)
   commit_log_print_value(log_file, width, &val);
 }
 
+#ifdef ENABLE_FORCE_RISCV
+static void commit_log_print_insn(processor_t *p, reg_t pc, insn_t insn)
+{
+  auto& reg = p->get_state()->log_reg_write;
+
+  for (auto item : reg) {
+    if (item.first == 0)
+      continue;
+    int rd = item.first >> 4;
+    uint64_t mask = 0xffffffffffffffffull;
+    uint32_t pid = p->get_id();
+    uint8_t *p_reg_start;
+    switch (item.first & 0xf) {
+    case 0:  // xreg write
+      update_generator_register(pid, xpr_name[rd], item.second.v[0], mask, "write");
+      break;
+    case 1: // freg write
+      update_generator_register(pid, fpr_name[rd], item.second.v[0], mask, "write");
+      break;
+    case 2: // vreg write
+      update_vector_element(pid, vr_name[rd], rd, 0, p->VU.VLEN >> 3, (uint8_t *)item.second.v[0], p->VU.VLEN >> 3, "write");
+      break;
+    case 3:
+      break;
+    case 4: // csr
+      update_generator_register(pid, csr_name(rd), item.second.v[0], mask, "write");
+      break;
+    case 5:  // xreg read
+      update_generator_register(pid, xpr_name[rd], item.second.v[0], mask, "read");
+      break;
+    case 6: // freg read
+      update_generator_register(pid, fpr_name[rd], item.second.v[0], mask, "read");
+      break;
+    default:
+      assert("can't been here" && 0);
+      break;
+    }
+  }
+}
+#else
 static void commit_log_print_insn(processor_t *p, reg_t pc, insn_t insn)
 {
   FILE *log_file = p->get_log_file();
@@ -150,6 +190,7 @@ static void commit_log_print_insn(processor_t *p, reg_t pc, insn_t insn)
   }
   fprintf(log_file, "\n");
 }
+#endif
 
 inline void processor_t::update_histogram(reg_t pc)
 {
@@ -204,8 +245,12 @@ static inline reg_t execute_insn_logged(processor_t* p, reg_t pc, insn_fetch_t f
 
 bool processor_t::slow_path()
 {
+#ifdef ENABLE_FORCE_RISCV
+  return true;
+#else
   return debug || state.single_step != state.STEP_NONE || state.debug_mode ||
          log_commits_enabled || histogram_enabled || in_wfi || check_triggers_icount;
+#endif
 }
 
 // fetch/decode/execute loop
@@ -280,6 +325,7 @@ void processor_t::step(size_t n)
 
           in_wfi = false;
           insn_fetch_t fetch = mmu->load_insn(pc);
+          std::cout << "pc: " << std::hex << pc << std::endl;
           if (debug && !state.serialized)
             disasm(fetch.insn);
           pc = execute_insn_logged(this, pc, fetch);

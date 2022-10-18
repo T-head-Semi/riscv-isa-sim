@@ -165,6 +165,19 @@ class ns16550_t : public abstract_device_t {
   static const int MAX_BACKOFF = 16;
 };
 
+class magicbox_t : public abstract_device_t {
+ public:
+  magicbox_t(bus_t *bus, abstract_interrupt_controller_t *intctrl);
+  bool load(reg_t addr, size_t len, uint8_t* bytes);
+  bool store(reg_t addr, size_t len, const uint8_t* bytes);
+ private:
+  bus_t *bus;
+  abstract_interrupt_controller_t *intctrl;
+  reg_t dma_src;
+  reg_t dma_dest;
+  reg_t dma_len;
+};
+
 template<typename T>
 void write_little_endian_reg(T* word, reg_t addr, size_t len, const uint8_t* bytes)
 {

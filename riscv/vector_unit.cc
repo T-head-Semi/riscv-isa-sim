@@ -79,8 +79,14 @@ template<class T> T& vectorUnit_t::elt(reg_t vReg, reg_t n, bool UNUSED is_write
 #endif
   reg_referenced[vReg] = 1;
 
+#ifdef ENABLE_FORCE_RISCV
+  do_callback(vReg, is_write);
+#else
   if (unlikely(p->get_log_commits_enabled() && is_write))
     p->get_state()->log_reg_write[((vReg) << 4) | 2] = {0, 0};
+
+#endif
+
 
   T *regStart = (T*)((char*)reg_file + vReg * (VLEN >> 3));
   return regStart[n];
@@ -153,3 +159,16 @@ template EGU32x4_t& vectorUnit_t::elt_group<EGU32x4_t>(reg_t, reg_t, bool);
 template EGU32x8_t& vectorUnit_t::elt_group<EGU32x8_t>(reg_t, reg_t, bool);
 template EGU64x4_t& vectorUnit_t::elt_group<EGU64x4_t>(reg_t, reg_t, bool);
 template EGU8x16_t& vectorUnit_t::elt_group<EGU8x16_t>(reg_t, reg_t, bool);
+
+#ifdef ENABLE_FORCE_RISCV
+extern const char* vr_name[];
+void vectorUnit_t::vectorUnit_t::do_callback(reg_t vReg, bool is_write)
+{
+  uint8_t* start = (uint8_t*)reg_file + vReg * (VLEN >> 3);
+  if (is_write)
+    p->get_state()->log_reg_write[(vReg << 4) | 2] = {(reg_t)start, 0};
+  else {
+    update_vector_element(p->get_id(), vr_name[vReg], vReg, 0, VLEN >> 3, start, VLEN >> 3, "read");
+  }
+}
+#endif

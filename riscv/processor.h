@@ -76,6 +76,8 @@ struct state_t
 {
   void reset(processor_t* const proc, reg_t max_isa);
 
+  bool force;
+
   reg_t pc;
   regfile_t<reg_t, NXPR, true> XPR;
   regfile_t<freg_t, NFPR, false> FPR;
@@ -197,6 +199,14 @@ public:
               FILE *log_file, std::ostream& sout_); // because of command line option --log and -s we need both
   ~processor_t();
 
+  virtual reg_t set_vl_api(reg_t reqVL, reg_t newType) { return 0; }
+  virtual void set_privilege_api(reg_t prv) {}
+  virtual void set_csr_api(int which, reg_t val) {}
+  virtual bool set_pc_api(const std::string& name, const uint8_t* bytes, size_t len) { return false; } //len advertises the size of the buffer
+  virtual bool retrieve_pc_api(uint8_t* bytes, const std::string& name, size_t len) { return false; } //len advertises the size of the buffer
+  virtual void retrieve_privilege_api(reg_t* val) {}
+  virtual reg_t get_csr_api(int which) { return 0; }
+
   const isa_parser_t &get_isa() { return *isa; }
   const cfg_t &get_cfg() { return *cfg; }
 
@@ -271,7 +281,7 @@ public:
       throw trap_instruction_address_misaligned(state.v, pc, 0, 0);
   }
   reg_t legalize_privilege(reg_t);
-  void set_privilege(reg_t, bool);
+  virtual void set_privilege(reg_t, bool);
   const char* get_privilege_string();
   void update_histogram(reg_t pc);
   const disassembler_t* get_disassembler() { return disassembler; }
@@ -353,6 +363,8 @@ private:
   friend class clint_t;
   friend class plic_t;
   friend class extension_t;
+  friend class proclib_t;
+  friend class mmulib_t;
 
   void parse_varch_string(const char*);
   void parse_priv_string(const char*);

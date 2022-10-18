@@ -337,6 +337,55 @@ int fdt_parse_ns16550(const void *fdt, reg_t *ns16550_addr,
   return 0;
 }
 
+
+int fdt_parse_magicbox(const void *fdt, reg_t *magicbox_addr,
+#if 0
+                       uint32_t *reg_shift, uint32_t *reg_io_width,
+                       uint32_t* reg_int_id,
+#endif
+                       const char *compatible)
+{
+  int nodeoffset, len, rc;
+  const fdt32_t *reg_p;
+
+  nodeoffset = fdt_node_offset_by_compatible(fdt, -1, compatible);
+  if (nodeoffset < 0)
+    return nodeoffset;
+
+  rc = fdt_get_node_addr_size(fdt, nodeoffset, magicbox_addr, NULL, "reg");
+  if (rc < 0 || !magicbox_addr)
+    return -ENODEV;
+#if 0
+  reg_p = (fdt32_t *)fdt_getprop(fdt, nodeoffset, "reg-shift", &len);
+  if (reg_shift) {
+    if (reg_p) {
+      *reg_shift = fdt32_to_cpu(*reg_p);
+    } else {
+      *reg_shift = MAGICBOX_REG_SHIFT;
+    }
+  }
+
+  reg_p = (fdt32_t *)fdt_getprop(fdt, nodeoffset, "reg-io-width", &len);
+  if (reg_io_width) {
+    if (reg_p) {
+      *reg_io_width = fdt32_to_cpu(*reg_p);
+    } else {
+      *reg_io_width = MAGICBOX_REG_IO_WIDTH;
+    }
+  }
+
+  reg_p = (fdt32_t *)fdt_getprop(fdt, nodeoffset, "interrupts", &len);
+  if (reg_int_id) {
+    if (reg_p) {
+      *reg_int_id = fdt32_to_cpu(*reg_p);
+    } else {
+      *reg_int_id = MAGICBOX_INTERRUPT_ID;
+    }
+  }
+#endif
+  return 0;
+}
+
 int fdt_parse_pmp_num(const void *fdt, int cpu_offset, reg_t *pmp_num)
 {
   int rc;

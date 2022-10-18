@@ -14,6 +14,7 @@
 #include <strings.h>
 #include <cinttypes>
 #include <type_traits>
+#include "force_riscv.h"
 
 typedef int64_t sreg_t;
 typedef uint64_t reg_t;

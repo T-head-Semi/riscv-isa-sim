@@ -8,6 +8,7 @@
 #include "devices.h"
 #include "log_file.h"
 #include "processor.h"
+#include "proclib.h"
 #include "simif.h"
 
 #include <fesvr/htif.h>
@@ -35,6 +36,9 @@ public:
         FILE *cmd_file); // needed for command line option --cmd
   ~sim_t();
 
+#ifdef ENABLE_FORCE_RISCV
+  friend class simlib_t;
+#endif
   // run the simulation to completion
   int run();
   void set_debug(bool value);
@@ -54,6 +58,7 @@ public:
   const char* get_dts() { return dts.c_str(); }
   processor_t* get_core(size_t i) { return procs.at(i); }
   abstract_interrupt_controller_t* get_intctrl() const { assert(plic.get()); return plic.get(); }
+  bus_t* get_bus() const { return (bus_t *)&bus; }
   virtual const cfg_t &get_cfg() const override { return *cfg; }
 
   virtual const std::map<size_t, processor_t*>& get_harts() const override { return harts; }
@@ -78,6 +83,7 @@ private:
   std::vector<std::shared_ptr<abstract_device_t>> devices;
   std::shared_ptr<clint_t> clint;
   std::shared_ptr<plic_t> plic;
+  std::shared_ptr<magicbox_t> magicbox;
   bus_t bus;
   log_file_t log_file;
 

@@ -62,7 +62,11 @@ reg_t mmu_t::translate(mem_access_info_t access_info, reg_t len)
   bool virt = access_info.effective_virt;
   reg_t mode = (reg_t) access_info.effective_priv;
 
+#ifdef ENABLE_FORCE_RISCV
+  reg_t paddr = walk(access_info, true) | (addr & (PGSIZE-1));
+#else
   reg_t paddr = walk(access_info) | (addr & (PGSIZE-1));
+#endif
   if (!pmp_ok(paddr, len, type, mode))
     throw_access_exception(virt, addr, type);
   return paddr;
@@ -256,6 +260,10 @@ void mmu_t::store_slow_path_intrapage(reg_t len, const uint8_t* bytes, mem_acces
   reg_t vpn = addr >> PGSHIFT;
   if (!access_info.flags.is_special_access() && vpn == (tlb_store_tag[vpn % TLB_ENTRIES] & ~TLB_CHECK_TRIGGERS)) {
     if (actually_store) {
+#ifdef ENABLE_FORCE_RISCV
+      reg_t paddr = tlb_data[vpn % TLB_ENTRIES].target_offset + addr;
+      update_generator_memory(nullptr != proc ? proc->id : 0xffffffffu, addr, 0, paddr, len, reinterpret_cast<const char*>(bytes), "write");
+#endif
       auto host_addr = tlb_data[vpn % TLB_ENTRIES].host_offset + addr;
       memcpy(host_addr, bytes, len);
     }
@@ -265,6 +273,9 @@ void mmu_t::store_slow_path_intrapage(reg_t len, const uint8_t* bytes, mem_acces
   reg_t paddr = translate(access_info, len);
 
   if (actually_store) {
+#ifdef ENABLE_FORCE_RISCV
+    update_generator_memory(nullptr != proc ? proc->id : 0xffffffffu, addr, 0, paddr, len, reinterpret_cast<const char*>(bytes), "write");
+#endif
     if (auto host_addr = sim->addr_to_mem(paddr)) {
       memcpy(host_addr, bytes, len);
       if (tracer.interested_in_range(paddr, paddr + PGSIZE, STORE))
@@ -473,7 +484,11 @@ reg_t mmu_t::s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_ty
   }
 }
 
+#ifdef ENABLE_FORCE_RISCV
+reg_t mmu_t::walk(mem_access_info_t access_info, bool event)
+#else
 reg_t mmu_t::walk(mem_access_info_t access_info)
+#endif
 {
   access_type type = access_info.type;
   reg_t addr = access_info.vaddr;
@@ -555,7 +570,18 @@ reg_t mmu_t::walk(mem_access_info_t access_info)
                         | (vpn & ((reg_t(1) << napot_bits) - 1))
                         | (vpn & ((reg_t(1) << ptshift) - 1))) << PGSHIFT;
       reg_t phys = page_base | (addr & page_mask);
+#ifdef ENABLE_FORCE_RISCV
+      reg_t value = s2xlate(addr, phys, type, type, virt, hlvx) & ~page_mask;
+      //report the translation via the callback mechanism
+      if (event) {
+        bool has_stage_two = (vm.levels > 1);
+        MmuEvent mmu_event(addr, value, Memtype::Normal, has_stage_two, 0, 0, 0, 0);
+        update_mmu_event(&mmu_event);
+      }
+      return value;
+#else
       return s2xlate(addr, phys, type, type, virt, hlvx) & ~page_mask;
+#endif
     }
   }
 

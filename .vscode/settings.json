@@ -1,0 +1,32 @@
+{
+    "files.associations": {
+        "*.py": "python",
+        "*.sv": "systemverilog",
+        "*.svi": "systemverilog",
+        "*.litmus": "litmus",
+        "*.config": "xml",
+        "iostream": "cpp",
+        "list": "cpp",
+        "optional": "cpp"
+    },
+    // Configure .clangd arguments
+    "clangd.checkUpdates": true,
+    "clangd.onConfigChanged": "restart",
+    "clangd.arguments": [
+        // --background-index              - Index project code in the background and persist index on disk.
+        // "-background-index",
+        // --header-insertion=<value>      - Add #include directives when accepting code completions
+        //  =iwyu                          -   Include what you use. Insert the owning header for top-level symbols, unless the header is already directly included or the symbol is forward-declared
+        //  =never                         -   Never insert #include directives as part of code completion
+        // "-header-insertion=iwyu",
+        // --header-insertion-decorators   - Prepend a circular dot or space before the completion label, depending on whether an include line will be inserted or not
+        "-header-insertion-decorators",
+        // --inlay-hints                   - Enable preview of InlayHints feature
+        "--inlay-hints",
+        // --function-arg-placeholders     - When disabled, completions contain only parentheses for function calls. When enabled, completions also contain placeholders for method parameters
+        "--function-arg-placeholders",
+        "--compile-commands-dir=build",
+    ],
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+}

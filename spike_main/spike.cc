@@ -2,7 +2,11 @@
 
 #include "config.h"
 #include "cfg.h"
+#ifdef ENABLE_FORCE_RISCV
+#include "simlib.h"
+#else
 #include "sim.h"
+#endif
 #include "mmu.h"
 #include "arith.h"
 #include "remote_bitbang.h"
@@ -320,7 +324,15 @@ static std::vector<size_t> parse_hartids(const char *s)
   return hartids;
 }
 
+#ifdef ENABLE_FORCE_RISCV
+cfg_t *global_cfg;
+extern bool isa_rv32;
+extern bool isa_D;
+extern simlib_t* _pSimulatorTopLevel;
+int parse_and_initial_simulator(int argc, char** argv)
+#else
 int main(int argc, char** argv)
+#endif
 {
   bool debug = false;
   bool halted = false;
@@ -337,7 +349,12 @@ int main(int argc, char** argv)
   std::unique_ptr<cache_sim_t> l2;
   bool log_cache = false;
   bool log_commits = false;
+#ifdef ENABLE_FORCE_RISCV
+  const char *log_path = "spike.log";
+  bool auto_init_mem = false;
+#else
   const char *log_path = nullptr;
+#endif
   std::vector<std::function<extension_t*()>> extensions;
   const char* initrd = NULL;
   const char* dtb_file = NULL;
@@ -358,7 +375,11 @@ int main(int argc, char** argv)
   };
   cfg_arg_t<size_t> nprocs(1);
 
+#ifdef ENABLE_FORCE_RISCV
+  global_cfg = new cfg_t(/*default_initrd_bounds=*/std::make_pair((reg_t)0, (reg_t)0),
+#else
   cfg_t cfg(/*default_initrd_bounds=*/std::make_pair((reg_t)0, (reg_t)0),
+#endif
             /*default_bootargs=*/nullptr,
             /*default_isa=*/DEFAULT_ISA,
             /*default_priv=*/DEFAULT_PRIV,
@@ -366,10 +387,18 @@ int main(int argc, char** argv)
             /*default_misaligned=*/false,
             /*default_endianness*/endianness_little,
             /*default_pmpregions=*/16,
+#ifdef ENABLE_FORCE_RISCV
+            /*default_mem_layout=*/parse_mem_layout("0x1000:0x10000,0x50000000:0xffffb0000000"),
+#else
             /*default_mem_layout=*/parse_mem_layout("2048"),
+#endif
             /*default_hartids=*/std::vector<size_t>(),
             /*default_real_time_clint=*/false,
             /*default_trigger_count=*/4);
+
+#ifdef ENABLE_FORCE_RISCV
+#define cfg (*global_cfg)
+#endif
 
   auto const device_parser = [&plugin_device_factories](const char *s) {
     const std::string name(s);
@@ -396,7 +425,8 @@ int main(int argc, char** argv)
   parser.option(0, "pc", 1, [&](const char* s){cfg.start_pc = strtoull(s, 0, 0);});
   parser.option(0, "hartids", 1, [&](const char* s){
     cfg.hartids = parse_hartids(s);
-    cfg.explicit_hartids = true;
+    if (cfg.nprocs() != 0)
+      cfg.explicit_hartids = true;
   });
   parser.option(0, "ic", 1, [&](const char* s){ic.reset(new icache_sim_t(s));});
   parser.option(0, "dc", 1, [&](const char* s){dc.reset(new dcache_sim_t(s));});
@@ -466,6 +496,9 @@ int main(int argc, char** argv)
       exit(-1);
     }
   });
+#ifdef ENABLE_FORCE_RISCV
+  parser.option(0, "auto-init-mem", 0, [&](const char* s){auto_init_mem = true;});
+#endif
 
   auto argv1 = parser.parse(argv);
   std::vector<std::string> htif_args(argv1, (const char*const*)argv + argc);
@@ -524,10 +557,23 @@ int main(int argc, char** argv)
     cfg.hartids = default_hartids;
   }
 
+#ifdef ENABLE_FORCE_RISCV
+  std::string isa_str(global_cfg->isa());
+  isa_rv32 = isa_str.find("RV32") != std::string::npos;
+  isa_D = (isa_str.find("F") != std::string::npos) && (isa_str.find("D") != std::string::npos);
+
+  _pSimulatorTopLevel = new simlib_t(global_cfg, halted,
+      mems, plugin_device_factories, htif_args, dm_config, log_path, dtb_enabled, dtb_file,
+      socket,
+      cmd_file);
+  #define s (*_pSimulatorTopLevel)
+#else
   sim_t s(&cfg, halted,
       mems, plugin_device_factories, htif_args, dm_config, log_path, dtb_enabled, dtb_file,
       socket,
       cmd_file);
+#endif
+
   std::unique_ptr<remote_bitbang_t> remote_bitbang((remote_bitbang_t *) NULL);
   std::unique_ptr<jtag_dtm_t> jtag_dtm(
       new jtag_dtm_t(&s.debug_module, dmi_rti));
@@ -541,6 +587,7 @@ int main(int argc, char** argv)
     return 0;
   }
 
+#ifndef ENABLE_FORCE_RISCV
   if (ic && l2) ic->set_miss_handler(&*l2);
   if (dc && l2) dc->set_miss_handler(&*l2);
   if (ic) ic->set_log(log_cache);
@@ -562,6 +609,14 @@ int main(int argc, char** argv)
 
   for (auto& mem : mems)
     delete mem.second;
-
+  
   return return_code;
+
+#else
+  _pSimulatorTopLevel->configure_log(log, true);
+  _pSimulatorTopLevel->set_histogram(histogram);
+#undef cfg
+#undef s
+  return 0;
+#endif
 }

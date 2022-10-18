@@ -102,6 +102,9 @@ class htif_t : public chunked_memif_t
   std::vector<std::string> symbol_elfs;
   std::map<uint64_t, std::string> addr2symbol;
 
+#ifdef ENABLE_FORCE_RISCV
+  friend class simlib_t;
+#endif
   friend class memif_t;
   friend class syscall_t;
 };

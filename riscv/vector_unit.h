@@ -102,6 +102,10 @@ public:
   bool vill;
   bool vstart_alu;
 
+#ifdef ENABLE_FORCE_RISCV
+  void do_callback(reg_t vecRegIndex, bool write);
+#endif
+
   // vector element for various SEW
   template<class T> T& elt(reg_t vReg, reg_t n, bool is_write = false);
   // vector element group access, where EG is a std::array<T, N>.

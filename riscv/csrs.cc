@@ -59,7 +59,7 @@ void csr_t::write(const reg_t val) noexcept {
 }
 
 void csr_t::log_write() const noexcept {
-  log_special_write(address, written_value());
+  if (!state->force) log_special_write(address, written_value());
 }
 
 void csr_t::log_special_write(const reg_t UNUSED address, const reg_t UNUSED val) const noexcept {
@@ -1347,7 +1347,8 @@ void float_csr_t::verify_permissions(insn_t insn, bool write) const {
 }
 
 bool float_csr_t::unlogged_write(const reg_t val) noexcept {
-  dirty_fp_state;
+  processor_t* const p = proc;
+  if (!state->force) dirty_fp_state;
   return masked_csr_t::unlogged_write(val);
 }
 
@@ -1369,9 +1370,17 @@ reg_t composite_csr_t::read() const noexcept {
 }
 
 bool composite_csr_t::unlogged_write(const reg_t val) noexcept {
+#ifdef ENABLE_FORCE_RISCV
+  state->force = true;
+  upper_csr->write(val >> upper_lsb);
+  lower_csr->write(val);
+  state->force = false;
+  return true;  // logging is done only by the underlying CSRs
+#else
   upper_csr->write(val >> upper_lsb);
   lower_csr->write(val);
   return false;  // logging is done only by the underlying CSRs
+#endif
 }
 
 seed_csr_t::seed_csr_t(processor_t* const proc, const reg_t addr):
@@ -1415,7 +1424,8 @@ void vector_csr_t::write_raw(const reg_t val) noexcept {
 
 bool vector_csr_t::unlogged_write(const reg_t val) noexcept {
   if (mask == 0) return false;
-  dirty_vs_state;
+  processor_t* const p = proc;
+  if (!state->force) dirty_vs_state;
   return basic_csr_t::unlogged_write(val & mask);
 }
 
@@ -1431,7 +1441,8 @@ void vxsat_csr_t::verify_permissions(insn_t insn, bool write) const {
 }
 
 bool vxsat_csr_t::unlogged_write(const reg_t val) noexcept {
-  dirty_vs_state;
+  processor_t* const p = proc;
+  if (!state->force) dirty_vs_state;
   return masked_csr_t::unlogged_write(val);
 }
 

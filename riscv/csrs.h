@@ -65,6 +65,7 @@ class csr_t {
   // For access to written_value() and unlogged_write():
   friend class rv32_high_csr_t;
   friend class rv32_low_csr_t;
+  friend class proclib_t;
 };
 
 typedef std::shared_ptr<csr_t> csr_t_p;
@@ -125,6 +126,7 @@ class pmpaddr_csr_t: public csr_t {
   friend class pmpcfg_csr_t;  // so he can access cfg
   uint8_t cfg;
   const size_t pmpidx;
+  friend class mmulib_t;
 };
 
 typedef std::shared_ptr<pmpaddr_csr_t> pmpaddr_csr_t_p;
@@ -738,6 +740,7 @@ class vector_csr_t: public basic_csr_t {
   virtual bool unlogged_write(const reg_t val) noexcept override;
  private:
   reg_t mask;
+  friend class proclib_t;
 };
 
 typedef std::shared_ptr<vector_csr_t> vector_csr_t_p;

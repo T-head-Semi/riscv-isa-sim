@@ -10,6 +10,10 @@ reg_t next_pc = p->get_state()->sepc->read();
 set_pc_and_serialize(next_pc);
 reg_t s = STATE.sstatus->read();
 reg_t prev_prv = get_field(s, MSTATUS_SPP);
+#ifdef ENABLE_FORCE_RISCV
+SimException exit_s(0x4e, 0, "exit_sret", next_pc);
+update_exception_event(&exit_s);
+#endif
 s = set_field(s, MSTATUS_SIE, get_field(s, MSTATUS_SPIE));
 s = set_field(s, MSTATUS_SPIE, 1);
 s = set_field(s, MSTATUS_SPP, PRV_U);

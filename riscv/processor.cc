@@ -71,8 +71,10 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
   else if (isa->get_max_xlen() == 64)
     set_mmu_capability(IMPL_MMU_SV57);
 
+#ifndef ENABLE_FORCE_RISCV
   set_impl(IMPL_MMU_ASID, true);
   set_impl(IMPL_MMU_VMID, true);
+#endif
 
   reset();
 }
@@ -193,6 +195,7 @@ static int xlen_to_uxl(int xlen)
 
 void state_t::reset(processor_t* const proc, reg_t max_isa)
 {
+  force = false;
   pc = DEFAULT_RSTVEC;
   XPR.reset();
   FPR.reset();
@@ -833,6 +836,9 @@ void processor_t::debug_output_log(std::stringstream *s)
 
 void processor_t::take_trap(trap_t& t, reg_t epc)
 {
+#ifdef ENABLE_FORCE_RISCV
+  state.force = true;
+#endif
   unsigned max_xlen = isa->get_max_xlen();
 
   if (debug) {
@@ -864,10 +870,18 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
   if (interrupt) {
     vsdeleg = (curr_virt && state.prv <= PRV_S) ? state.hideleg->read() : 0;
     hsdeleg = (state.prv <= PRV_S) ? state.mideleg->read() : 0;
+#ifdef ENABLE_FORCE_RISCV
+    update_generator_register(this->id, "mideleg", state.mideleg->read(), 0xffffffffffffffffull, "read");
+    update_generator_register(this->id, "hideleg", state.hideleg->read(), 0xffffffffffffffffull, "read");
+#endif
     bit &= ~((reg_t)1 << (max_xlen - 1));
   } else {
     vsdeleg = (curr_virt && state.prv <= PRV_S) ? (state.medeleg->read() & state.hedeleg->read()) : 0;
     hsdeleg = (state.prv <= PRV_S) ? state.medeleg->read() : 0;
+#ifdef ENABLE_FORCE_RISCV
+    update_generator_register(this->id, "mideleg", state.mideleg->read(), 0xffffffffffffffffull, "read");
+    update_generator_register(this->id, "hideleg", state.hideleg->read(), 0xffffffffffffffffull, "read");
+#endif
   }
   if (state.prv <= PRV_S && bit < max_xlen && ((vsdeleg >> bit) & 1)) {
     // Handle the trap in VS-mode
@@ -876,6 +890,11 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     state.vscause->write((interrupt) ? (t.cause() - 1) : t.cause());
     state.vsepc->write(epc);
     state.vstval->write(t.get_tval());
+
+#ifdef ENABLE_FORCE_RISCV
+    SimException enter_s(state.vscause->read(), state.vstval->read(), "enter_vs", epc);
+    update_exception_event(&enter_s);
+#endif
 
     reg_t s = state.sstatus->read();
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
@@ -894,6 +913,17 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     state.htinst->write(t.get_tinst());
 
     reg_t s = state.nonvirtual_sstatus->read();
+#ifdef ENABLE_FORCE_RISCV
+    update_generator_register(this->id, "stvec", state.stvec->read(), 0xffffffffffffffffull, "read");
+    update_generator_register(this->id, "PC", state.pc, 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "scause", state.scause->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "sepc", state.sepc->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "stval", state.stval->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "vstart", VU.vstart->read(), 0xffffffffffffffffull, "write");
+
+    SimException enter_s(state.scause->read(), state.stval->read(), "enter_s", epc);
+    update_exception_event(&enter_s);
+#endif
     s = set_field(s, MSTATUS_SPIE, get_field(s, MSTATUS_SIE));
     s = set_field(s, MSTATUS_SPP, state.prv);
     s = set_field(s, MSTATUS_SIE, 0);
@@ -922,6 +952,18 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     state.mtval2->write(t.get_tval2());
     state.mtinst->write(t.get_tinst());
 
+#ifdef ENABLE_FORCE_RISCV
+    update_generator_register(this->id, "mtvec", state.mtvec->read(), 0xffffffffffffffffull, "read");
+    update_generator_register(this->id, "PC", state.pc, 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "mcause", state.mcause->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "mepc", state.mepc->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "mtval", state.mtval->read(), 0xffffffffffffffffull, "write");
+    update_generator_register(this->id, "vstart", VU.vstart->read(), 0xffffffffffffffffull, "write");
+
+    SimException enter_m(state.mcause->read(), state.mtval->read(), "enter_m", epc);
+    update_exception_event(&enter_m);
+#endif
+
     reg_t s = state.mstatus->read();
     s = set_field(s, MSTATUS_MPIE, get_field(s, MSTATUS_MIE));
     s = set_field(s, MSTATUS_MPP, state.prv);
@@ -932,6 +974,9 @@ void processor_t::take_trap(trap_t& t, reg_t epc)
     if (state.mstatush) state.mstatush->write(s >> 32);  // log mstatush change
     set_privilege(PRV_M, false);
   }
+#ifdef ENABLE_FORCE_RISCV
+  state.force = false;
+#endif
 }
 
 void processor_t::take_trigger_action(triggers::action_t action, reg_t breakpoint_tval, reg_t epc, bool virt)

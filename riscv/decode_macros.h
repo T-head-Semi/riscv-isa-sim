@@ -15,8 +15,13 @@
 #define STATE (*p->get_state())
 #define FLEN (p->get_flen())
 #define CHECK_REG(reg) ((void) 0)
+#ifdef ENABLE_FORCE_RISCV
+#define READ_REG(reg) (CHECK_REG(reg), STATE.log_reg_write[(reg) << 4 | 5] = {STATE.XPR[reg], 0}, STATE.XPR[reg])
+#define READ_FREG(reg) (STATE.log_reg_write[((reg) << 4) | 6] = STATE.FPR[reg], STATE.FPR[reg])
+#else
 #define READ_REG(reg) (CHECK_REG(reg), STATE.XPR[reg])
 #define READ_FREG(reg) STATE.FPR[reg]
+#endif
 #define RD READ_REG(insn.rd())
 #define RS1 READ_REG(insn.rs1())
 #define RS2 READ_REG(insn.rs2())
@@ -185,10 +190,20 @@ static inline bool is_aligned(const unsigned val, const unsigned pos)
     } \
   } while (0);
 
+#ifdef ENABLE_FORCE_RISCV
+#define set_fp_exceptions ({ if (softfloat_exceptionFlags) { \
+                               STATE.force = true; \
+                               STATE.fflags->write(STATE.fflags->read() | softfloat_exceptionFlags); \
+                               STATE.force = false; \
+                               update_generator_register(p->get_id(), "fcsr", STATE.fflags->read() | (STATE.frm->read() << 5) , 0xffffffffffffffffull, "write"); \
+                             } \
+                             softfloat_exceptionFlags = 0; })
+#else
 #define set_fp_exceptions ({ if (softfloat_exceptionFlags) { \
                                STATE.fflags->write(STATE.fflags->read() | softfloat_exceptionFlags); \
                              } \
                              softfloat_exceptionFlags = 0; })
+#endif
 
 #define sext32(x) ((sreg_t)(int32_t)(x))
 #define zext32(x) ((reg_t)(uint32_t)(x))

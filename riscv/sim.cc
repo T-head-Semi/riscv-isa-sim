@@ -35,6 +35,7 @@ const size_t sim_t::INTERLEAVE;
 extern device_factory_t* clint_factory;
 extern device_factory_t* plic_factory;
 extern device_factory_t* ns16550_factory;
+extern device_factory_t* magicbox_factory;
 
 sim_t::sim_t(const cfg_t *cfg, bool halted,
              std::vector<std::pair<reg_t, abstract_mem_t*>> mems,
@@ -96,6 +97,15 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
   }
 #endif
 
+#ifdef ENABLE_FORCE_RISCV
+  debug_mmu = new mmulib_t(this, cfg->endianness, NULL);
+
+  for (size_t i = 0; i < cfg->nprocs(); i++) {
+    procs[i] = new proclib_t(&isa, cfg, this, cfg->hartids()[i], halted,
+                             log_file.get(), sout_);
+    harts[cfg->hartids()[i]] = procs[i];
+  }
+#else
   debug_mmu = new mmu_t(this, cfg->endianness, NULL);
 
   for (size_t i = 0; i < cfg->nprocs(); i++) {
@@ -103,6 +113,7 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
                                log_file.get(), sout_);
     harts[cfg->hartids()[i]] = procs[i];
   }
+#endif
 
   // When running without using a dtb, skip the fdt-based configuration steps
   if (!dtb_enabled) return;
@@ -118,7 +129,8 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
   std::vector<const device_factory_t*> device_factories = {
     clint_factory, // clint must be element 0
     plic_factory, // plic must be element 1
-    ns16550_factory};
+    ns16550_factory,
+    magicbox_factory};
   device_factories.insert(device_factories.end(),
                           plugin_device_factories.begin(),
                           plugin_device_factories.end());
@@ -227,13 +239,15 @@ sim_t::sim_t(const cfg_t *cfg, bool halted,
     cpu_idx++;
   }
 
-  if (cpu_idx != nprocs()) {
-      std::cerr << "core number in dts ("
-                <<  cpu_idx
-                << ") doesn't match it in command line ("
-                << nprocs() << ").\n";
-      exit(1);
-  }
+  /*
+    if (cpu_idx != nprocs()) {
+        std::cerr << "core number in dts ("
+                  <<  cpu_idx
+                  << ") doesn't match it in command line ("
+                  << nprocs() << ").\n";
+        exit(1);
+    }
+  */
 }
 
 sim_t::~sim_t()

@@ -14,6 +14,7 @@
 #include "cfg.h"
 #include <stdlib.h>
 #include <vector>
+#include "force_riscv.h"
 
 // virtual memory configuration
 #define PGSHIFT 12
@@ -93,6 +94,25 @@ public:
   mmu_t(simif_t* sim, endianness_t endianness, processor_t* proc);
   ~mmu_t();
 
+#ifndef ENABLE_FORCE_RISCV
+# define UPDATE_READ_MEM(vpn, addr, size, data) ({})
+# define UPDATE_WRITE_MEM(vpn, addr, size, val) ({})
+#else
+# define UPDATE_READ_MEM(vpn, addr, size, res) \
+  T data = from_target(res); \
+  reg_t paddr = tlb_data[vpn % TLB_ENTRIES].target_offset + addr; \
+  update_generator_memory(nullptr != proc ? proc->id : 0xffffffffu, addr, 0, paddr, size, reinterpret_cast<const char*>(&data), "read");
+
+# define UPDATE_WRITE_MEM(vpn, addr, size, val) \
+  reg_t paddr = tlb_data[vpn % TLB_ENTRIES].target_offset + addr; \
+  update_generator_memory(nullptr != proc ? proc->get_id() : 0xffffffffu, addr, 0, paddr, size, reinterpret_cast<const char*>(&val), "write");
+
+  friend class mmulib_t;
+  virtual int translate_api(reg_t addr, reg_t *paddr, uint64_t* pmp_info, reg_t len, access_type type, uint32_t xlate_flags) { return 0; }
+  virtual bool pmp_ok_api(reg_t addr, reg_t* pmpaddr_ptr, uint8_t* pmpcfg_ptr, reg_t len, access_type type, reg_t mode) { return true; };
+  virtual int walk_api(reg_t addr, reg_t* paddr_ptr, access_type type, reg_t prv, bool virt, bool hlvx) { return 0; }
+#endif
+
   template<typename T>
   T ALWAYS_INLINE load(reg_t addr, xlate_flags_t xlate_flags = {false, false, false}) {
     target_endian<T> res;
@@ -102,8 +122,10 @@ public:
 
     if (likely(!xlate_flags.is_special_access() && aligned && tlb_hit)) {
       res = *(target_endian<T>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr);
+      UPDATE_READ_MEM(vpn, addr, sizeof(T), res); \
     } else {
       load_slow_path(addr, sizeof(T), (uint8_t*)&res, xlate_flags);
+      UPDATE_READ_MEM(vpn, addr, sizeof(T), res); \
     }
 
     if (unlikely(proc && proc->get_log_commits_enabled()))
@@ -143,6 +165,7 @@ public:
     bool tlb_hit = tlb_store_tag[vpn % TLB_ENTRIES] == vpn;
 
     if (!xlate_flags.is_special_access() && likely(aligned && tlb_hit)) {
+      UPDATE_WRITE_MEM(vpn, addr, sizeof(T), val);
       *(target_endian<T>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val);
     } else {
       target_endian<T> target_val = to_target(val);
@@ -394,7 +417,11 @@ private:
   reg_t s2xlate(reg_t gva, reg_t gpa, access_type type, access_type trap_type, bool virt, bool hlvx);
 
   // perform a page table walk for a given VA; set referenced/dirty bits
+#ifdef ENABLE_FORCE_RISCV
+  reg_t walk(mem_access_info_t access_info, bool event);
+#else
   reg_t walk(mem_access_info_t access_info);
+#endif
 
   // handle uncommon cases: TLB misses, page faults, MMIO
   tlb_entry_t fetch_slow_path(reg_t addr);
