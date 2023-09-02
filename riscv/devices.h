@@ -165,14 +165,37 @@ class ns16550_t : public abstract_device_t {
   static const int MAX_BACKOFF = 16;
 };
 
+#define PLIC_MAX_DEVICES 1024
+
+struct int_trigger_t {
+  int_trigger_t(size_t type, uint32_t sche)
+    : type(type), sche(sche)
+  {}
+
+  size_t type;
+  uint32_t sche;
+};
+
+struct magic_context_t {
+  magic_context_t(processor_t *proc)
+    : proc(proc)
+  {}
+
+  std::vector<int_trigger_t> int_info;
+  processor_t *proc;
+};
+
 class magicbox_t : public abstract_device_t {
  public:
-  magicbox_t(bus_t *bus, abstract_interrupt_controller_t *intctrl);
+  magicbox_t(const simif_t* sim, bus_t *bus);
   bool load(reg_t addr, size_t len, uint8_t* bytes);
   bool store(reg_t addr, size_t len, const uint8_t* bytes);
+  void tick(reg_t rtc_ticks);
  private:
+  size_t type2MIPBits(uint32_t type);
   bus_t *bus;
-  abstract_interrupt_controller_t *intctrl;
+  std::map<size_t, magic_context_t*> contexts;
+  uint32_t int_trigger;
   reg_t dma_src;
   reg_t dma_dest;
   reg_t dma_len;
