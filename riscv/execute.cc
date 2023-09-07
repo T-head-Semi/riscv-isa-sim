@@ -325,7 +325,7 @@ void processor_t::step(size_t n)
 
           in_wfi = false;
           insn_fetch_t fetch = mmu->load_insn(pc);
-          std::cout << "pc: " << std::hex << pc << std::endl;
+          // std::cout << "pc: " << std::hex << pc << std::endl;
           if (debug && !state.serialized)
             disasm(fetch.insn);
           pc = execute_insn_logged(this, pc, fetch);
