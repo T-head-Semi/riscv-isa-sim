@@ -121,7 +121,7 @@ add_subdirectory(./riscv)
 add_subdirectory(./softfloat)
 
 
-add_library(${PROJECT_NAME} MODULE ./spike_main/handcar_cosim_wrapper.cc)
+add_library(${PROJECT_NAME} MODULE ./spike_main/handcar_cosim_wrapper.cc ./spike_main/spike.cc)
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE force_mod riscv softfloat disasm fesvr fdt  "-undefined dynamic_lookup")
 else()
