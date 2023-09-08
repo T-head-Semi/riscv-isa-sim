@@ -49,7 +49,25 @@ int simlib_t::step_simulator(int target_id, int num_steps, int stx_failed)
   processor_t* proc_ptr = get_core_by_id(target_id);
   if (proc_ptr == nullptr)
     return 1;
+
+  reg_t reserv_before = proc_ptr->get_mmu()->get_reservation() ;
   proc_ptr->step(num_steps);
+  reg_t reserv_after = proc_ptr->get_mmu()->get_reservation();
+  if( reserv_before != reserv_after && reserv_before == ((reg_t)-1) ) {
+    // set reservations LR isntrcutions
+    set_reservations[target_id] = reserv_after;
+  } else if (reserv_before != reserv_after && reserv_after == ((reg_t)-1)) {
+    // SC instructions
+    set_reservations[target_id] = -1;
+    for (int i=0; i<nprocs(); i++) {
+      if(set_reservations[i] == reserv_before && i != target_id) {
+        set_reservations[i] = -1;
+        processor_t* proc_ptr = get_core_by_id(i);
+        proc_ptr->get_mmu()->yield_load_reservation();
+      } 
+    }
+  }
+
   const char pc_name[] = "PC\0";
   const uint64_t pc_mask = 0xFFFFFFFFFFFFFFFF;
   uint64_t pc_value = 0x0;

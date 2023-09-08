@@ -263,6 +263,14 @@ public:
     })
   }
 
+  inline bool have_reservation() {
+    return !(load_reservation_address == ((reg_t)-1));
+  }
+
+  inline reg_t get_reservation() {
+    return load_reservation_address;
+  }
+
   inline void yield_load_reservation()
   {
     load_reservation_address = (reg_t)-1;

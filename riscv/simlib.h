@@ -125,6 +125,7 @@ private:
   void clear_chunk(reg_t taddr, size_t len);
 
   reg_t start_pc;
+  reg_t set_reservations[16];
 };
 
 extern volatile bool ctrlc_pressed;
